@@ -2,6 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/opencv.hpp>
+#include <alpr.h>
 
 
 #include <iostream>
@@ -27,6 +28,44 @@ CascadeClassifier car_cascade;
 string window_name = "Capture - Car detection";
 RNG rng(12345);
 
+int openalprDemo() {
+    // Initialize the library using United States style license plates.  
+    // You can use other countries/regions as well (for example: "eu", "au", or "kr")
+    alpr::Alpr openalpr("sg", "~/openalpr/config/openalpr.conf.in", "~/openalpr/runtime_data");
+
+    // Optionally specify the top N possible plates to return (with confidences).  Default is 10
+    openalpr.setTopN(20);
+
+    // Optionally, provide the library with a region for pattern matching.  This improves accuracy by 
+    // comparing the plate text with the regional pattern.
+    openalpr.setDefaultRegion("sg");
+
+    // Make sure the library loaded before continuing.  
+    // For example, it could fail if the config/runtime_data is not found
+    if (openalpr.isLoaded() == false)
+    {
+        std::cerr << "Error loading OpenALPR" << std::endl;
+        return 1;
+    }
+
+    // Recognize an image file.  You could alternatively provide the image bytes in-memory.
+    alpr::AlprResults results = openalpr.recognize("/path/to/image.jpg");
+
+    // Iterate through the results.  There may be multiple plates in an image, 
+    // and each plate return sthe top N candidates.
+    for (int i = 0; i < results.plates.size(); i++)
+    {
+      alpr::AlprPlateResult plate = results.plates[i];
+      std::cout << "plate" << i << ": " << plate.topNPlates.size() << " results" << std::endl;
+
+        for (int k = 0; k < plate.topNPlates.size(); k++)
+        {
+          alpr::AlprPlate candidate = plate.topNPlates[k];
+          std::cout << "    - " << candidate.characters << "\t confidence: " << candidate.overall_confidence;
+          std::cout << "\t pattern_match: " << candidate.matches_template << std::endl;
+        }
+    }
+}
 
 int getTrackId(int x, int y, map<int,KalmanFilter>& KFm){
     for (map<int,KalmanFilter>::iterator it = KFm.begin(); it!=KFm.end(); ++it){
