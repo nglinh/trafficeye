@@ -1,8 +1,10 @@
 #include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/video/tracking.hpp>
 #include <opencv2/opencv.hpp>
 #include <alpr.h>
+#include <unistd.h>
 
 
 #include <iostream>
@@ -13,7 +15,7 @@ using namespace cv;
 
 
 /** Function Headers */
-void detectByCascade( Mat frame );
+std::vector<Rect> detectByCascade( Mat frame );
 
 void detectByCascadeAndKalmanFilter( Mat frame, map<int,KalmanFilter>& KFm);
 
@@ -22,11 +24,33 @@ void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& fram
 void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame, map<int,KalmanFilter>& KFm);
 
 /** Global variables */
-String car_cascade_name = "../classifier/cars3.xml";
+String car_cascade_name = "../classifier/carsg.xml";
 String input_file, output_file;
 CascadeClassifier car_cascade;
 string window_name = "Capture - Car detection";
 RNG rng(12345);
+
+int trackWithCamshift(Rect ROI_rec, Mat &Image) {
+    Mat backproj, ROI_hsv, hist;
+    // Quantize the hue to 30 levels
+    // and the saturation to 32 levels
+    int hbins = 30, sbins = 32;
+    int histSize[] = {hbins, sbins};
+    float hranges[] = { 0, 180 };
+    // saturation varies from 0 (black-gray-white) to
+    // 255 (pure spectrum color)
+    float sranges[] = { 0, 256 };
+    const float* ranges[] = { hranges, sranges };
+    Mat ROI(Image, ROI_rec);
+
+    cvtColor(ROI, ROI_hsv, CV_BGR2HSV);
+    int channels[] = {0, 1};
+    calcHist(&ROI_hsv, 1, channels, Mat(), hist, 2, histSize, ranges, true, false);
+    calcBackProject(&Image, 1, channels, hist, backproj, ranges);
+    RotatedRect trackBox = CamShift(backproj, ROI_rec, TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 1 ));
+    imshow("backproj", backproj);
+    return 1;
+}
 
 int openalprDemo() {
     // Initialize the library using United States style license plates.  
@@ -179,7 +203,7 @@ void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& dete
 
 
 //detect and display bounding box by haar cascade classifier
-void detectByCascade( Mat frame )
+std::vector<Rect> detectByCascade( Mat frame )
 {
     std::vector<Rect> cars;
     Mat frame_gray;
@@ -187,12 +211,14 @@ void detectByCascade( Mat frame )
     cvtColor( frame, frame_gray, CV_BGR2GRAY );
     
     //-- Detect cars
-    car_cascade.detectMultiScale( frame_gray, cars, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE, Size(24,24), Size(64,64));
+    car_cascade.detectMultiScale( frame_gray, cars, 1.1, 10,0, Size(), Size(30,30));
     
-    for( size_t i = 0; i < cars.size(); i++ )
-    {
-     rectangle(frame, cvPoint(cars[i].x, cars[i].y), cvPoint(cars[i].x+cars[i].width, cars[i].y+cars[i].height), Scalar(255,0,255));
- }
+    // for( size_t i = 0; i < cars.size(); i++ )
+    // {
+    //     // rectangle(frame, cars[i], Scalar(255,0,255));
+    //     circle (frame, (cars[i].tl() + cars[i].br())*0.5, 5, Scalar(255,0,255));
+    // }
+    return cars;
 }
 
 void detectByCascadeAndKalmanFilter( Mat frame , map<int,KalmanFilter>& KFm)
@@ -208,28 +234,28 @@ void detectByCascadeAndKalmanFilter( Mat frame , map<int,KalmanFilter>& KFm)
 
     for( size_t i = 0; i < cars.size(); i++ )
     {
-        //int id = getTrackId(cars[i].x+cars[i].width/2, cars[i].y+cars[i].height/2, KFm);
-        // Mat_<float> measurement(1,2);
-        // measurement.at<float>(0) = cars[i].x+cars[i].width/2;
-        // measurement.at<float>(1) = cars[i].y+cars[i].height/2;
-        // measurement.at<float>(2) = cars[i].x+cars[i].width/2;
-        // measurement.at<float>(3) = cars[i].y+cars[i].height/2;
-        //Mat_<float> measurement = Mat_<float>::zeros(2,1);
-        //measurement.at<float>(0, 0) = cars[i].x+cars[i].width/2;
-        //measurement.at<float>(1, 0) = cars[i].y+cars[i].height/2;
-        //cout << "current " << KFm[id].statePre.at<float>(0) << " " << KFm[id].statePre.at<float>(1) << endl;
-        //Mat prediction = KFm[id].predict();
-        //cout << "predict "<< prediction.size().width << " " << prediction.size().height <<endl;
-        //cout << "measurement "<< measurement.size().width << " " << measurement.size().height <<endl;
-        //cout << "measurementMatrix " << KFm[i].measurementMatrix.size().width << " " << KFm[i].measurementMatrix.size().height <<endl;
-        //cout << "errorCovPre" << KFm[i].errorCovPre.size().width << " " << KFm[i].errorCovPre.size().height <<endl;
-        //cout << "measurement noise " << KFm[i].measurementNoiseCov.size().width << " " << KFm[i].measurementNoiseCov.size().height <<endl;
-        //cout << "statePre " << KFm[i].statePre.size().width << " " << KFm[i].statePre.size().height <<endl;
-        //cout << "predict " << prediction.at<float>(0) << " " << prediction.at<float>(1)<<endl;
-        //circle(frame, cvPoint(prediction.at<float>(0), prediction.at<float>(1)), 10,Scalar(255, 255, 0));
-        //KFm[id].correct(measurement);
+        int id = getTrackId(cars[i].x+cars[i].width/2, cars[i].y+cars[i].height/2, KFm);
+        Mat_<float> measurement(1,2);
+        measurement.at<float>(0) = cars[i].x+cars[i].width/2;
+        measurement.at<float>(1) = cars[i].y+cars[i].height/2;
+        measurement.at<float>(2) = cars[i].x+cars[i].width/2;
+        measurement.at<float>(3) = cars[i].y+cars[i].height/2;
+        // measurement = Mat_<float>::zeros(2,1);
+        // measurement.at<float>(0, 0) = cars[i].x+cars[i].width/2;
+        // measurement.at<float>(1, 0) = cars[i].y+cars[i].height/2;
+        cout << "current " << KFm[id].statePre.at<float>(0) << " " << KFm[id].statePre.at<float>(1) << endl;
+        Mat prediction = KFm[id].predict();
+        cout << "predict "<< prediction.size().width << " " << prediction.size().height <<endl;
+        cout << "measurement "<< measurement.size().width << " " << measurement.size().height <<endl;
+        cout << "measurementMatrix " << KFm[i].measurementMatrix.size().width << " " << KFm[i].measurementMatrix.size().height <<endl;
+        cout << "errorCovPre" << KFm[i].errorCovPre.size().width << " " << KFm[i].errorCovPre.size().height <<endl;
+        cout << "measurement noise " << KFm[i].measurementNoiseCov.size().width << " " << KFm[i].measurementNoiseCov.size().height <<endl;
+        cout << "statePre " << KFm[i].statePre.size().width << " " << KFm[i].statePre.size().height <<endl;
+        cout << "predict " << prediction.at<float>(0) << " " << prediction.at<float>(1)<<endl;
+        circle(frame, cvPoint(prediction.at<float>(0), prediction.at<float>(1)), 10,Scalar(255, 255, 0));
+        KFm[id].correct(measurement);
         rectangle(frame, cvPoint(cars[i].x, cars[i].y), cvPoint(cars[i].x+cars[i].width, cars[i].y+cars[i].height), Scalar(255,0,255));
-        //circle(frame, cvPoint(KFm[id].statePre.at<float>(0), KFm[id].statePre.at<float>(1)), 10,Scalar(255, 0, 0));
+        circle(frame, cvPoint(KFm[id].statePre.at<float>(0), KFm[id].statePre.at<float>(1)), 10,Scalar(255, 0, 0));
     }
 
 
@@ -239,22 +265,35 @@ void detectByCascadeAndKalmanFilter( Mat frame , map<int,KalmanFilter>& KFm)
 /** @function main */
 int main( int argc, const char** argv )
 {
-    BackgroundSubtractorMOG2 bg(30,16);
-    bg.set("nmixtures",3);
-    SimpleBlobDetector::Params params;
-    params.filterByColor = true;
-    params.blobColor = 0;
+    // Set up background subtraction
+    // BackgroundSubtractorMOG2 bg(30,16);
+    // bg.set("nmixtures",3);
+    // SimpleBlobDetector::Params params;
+    // params.filterByColor = true;
+    // params.blobColor = 0;
     // params.filterByArea = true;
     // params.minArea = 20;
     // params.maxArea = 200;
     // params.minDistBetweenBlobs = 
-    SimpleBlobDetector detector(params);
+    // SimpleBlobDetector detector(params);
     // SimpleBlobDetector detector;
 
-    map<int,KalmanFilter> KFm;
-    KFm.clear();
+    // Set up Kalman filter
+    // map<int,KalmanFilter> KFm;
+    // KFm.clear();
+    std::vector<Rect> cars;
     
-
+    Mat backproj, ROI_hsv, hist;
+    // Quantize the hue to 30 levels
+    // and the saturation to 32 levels
+    int hbins = 30, sbins = 32;
+    int histSize[] = {hbins, sbins};
+    float hranges[] = { 0, 180 };
+    // saturation varies from 0 (black-gray-white) to
+    // 255 (pure spectrum color)
+    float sranges[] = { 0, 256 };
+    const float* ranges[] = { hranges, sranges };
+    int channels[] = {0, 1};
 
     Mat frame;
     if (argc > 1)
@@ -269,12 +308,38 @@ int main( int argc, const char** argv )
     {
         while( true ){
             capture >> frame;
+            // float scale_w = frame.cols/160;
+            // float scale_h = frame.rows/120;
             if (!frame.empty()) {
-                // bgSub(bg, detector,frame);
-                // detectByCascade(frame);
-                detectByCascadeAndKalmanFilter(frame, KFm);
+                // if (!cars.empty()) {
+                //     for (int i = 0; i < cars.size(); i++){
+                //         calcBackProject(&frame, 1, channels, hist, backproj, ranges);
+                //         RotatedRect trackBox = CamShift(backproj, cars[i], TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 0.1 ));
+                //         rectangle(frame, trackBox.boundingRect(),  Scalar(255,0,255));
+                //         imshow("backproj", backproj);
+                //     }
+                // }
+                // else {
+                    // bgSub(bg, detector,frame);
+                    imshow(window_name, frame);
+                    Mat canvas;                    
+                    resize(frame, canvas, Size(), 0.16, 0.16);
+                    cars = detectByCascade(canvas);
+                    // detectByCascadeAndKalmanFilter(frame, KFm);
+                    for (int i = 0; i < cars.size(); i++){
+                        Point middle = (cars[i].tl() + cars[i].br())*0.5;   
+                        rectangle(frame, cars[i].tl()*6.25, cars[i].br()*6.25, Scalar(255,0,255), 3);
+                            // rectangle(canvas, cars[i], Scalar(255,0,255));
+                        // Mat ROI(frame, cars[i]);
+                        // imshow("ROI", ROI);
+                        // cvtColor(ROI, ROI_hsv, CV_BGR2HSV);
+                        // calcHist(&ROI_hsv, 1, channels, Mat(), hist, 2, histSize, ranges, true, false);
+                        // calcBackProject(&frame, 1, channels, hist, backproj, ranges);
+                        // RotatedRect trackBox = CamShift(backproj, cars[i], TermCriteria( TermCriteria::EPS | TermCriteria::COUNT, 10, 0.1 ));
+                    }
+                // }
                 imshow(window_name,frame);
-                output << frame;
+                output << canvas;
                 int c = waitKey(1);
                 if( (char)c == 'c' ) { return 0; }
             }
