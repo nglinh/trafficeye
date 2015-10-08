@@ -24,7 +24,7 @@ void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& fram
 void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame, map<int,KalmanFilter>& KFm);
 
 /** Global variables */
-String car_cascade_name = "../classifier/carsg.xml";
+String car_cascade_name = "../classifier/lbpcars1.xml";
 String input_file, output_file;
 CascadeClassifier car_cascade;
 string window_name = "Capture - Car detection";
@@ -211,7 +211,7 @@ std::vector<Rect> detectByCascade( Mat frame )
     cvtColor( frame, frame_gray, CV_BGR2GRAY );
     
     //-- Detect cars
-    car_cascade.detectMultiScale( frame_gray, cars, 1.1, 10,0, Size(), Size(30,30));
+    car_cascade.detectMultiScale( frame_gray, cars, 1.1, 6,0, Size(200,200), Size(300,300));
     
     // for( size_t i = 0; i < cars.size(); i++ )
     // {
@@ -304,6 +304,8 @@ int main( int argc, const char** argv )
     if( !car_cascade.load( car_cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
     VideoCapture capture(input_file);
     VideoWriter output(output_file, CV_FOURCC('F','M','P','4'), 14.999, Size(320,240));
+    double scaleUp = 1;
+    double scaleDown = 1;
     if( capture.isOpened() && output.isOpened())
     {
         while( true ){
@@ -321,14 +323,12 @@ int main( int argc, const char** argv )
                 // }
                 // else {
                     // bgSub(bg, detector,frame);
-                    imshow(window_name, frame);
                     Mat canvas;                    
-                    resize(frame, canvas, Size(), 0.16, 0.16);
+                    resize(frame, canvas, Size(), scaleDown, scaleDown);
                     cars = detectByCascade(canvas);
                     // detectByCascadeAndKalmanFilter(frame, KFm);
                     for (int i = 0; i < cars.size(); i++){
-                        Point middle = (cars[i].tl() + cars[i].br())*0.5;   
-                        rectangle(frame, cars[i].tl()*6.25, cars[i].br()*6.25, Scalar(255,0,255), 3);
+                        rectangle(frame, cars[i].tl()*scaleUp, cars[i].br()*scaleUp, Scalar(255,0,255), 3);
                             // rectangle(canvas, cars[i], Scalar(255,0,255));
                         // Mat ROI(frame, cars[i]);
                         // imshow("ROI", ROI);
