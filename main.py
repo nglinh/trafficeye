@@ -6,6 +6,7 @@ def main(argv):
 	input_file = ''
 	output_file = ''
 	cascade_file = ''
+	video_mode = False
 	try:
 		opts, args = getopt.getopt(argv,"hvi:o:c:",["ifile=","ofile=", "video=", "cascade="])
 	except getopt.GetoptError:
@@ -41,7 +42,7 @@ def detectVideo(input_file, cascade_file, output_file=''):
 		if ret:
 			canvas = cv2.resize(frame, None, fx=scaleDown, fy=scaleDown, interpolation=cv2.INTER_CUBIC)
 			gray = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
-			cars = car_cascade.detectMultiScale(gray, 1.1, 4, minSize=(20,20), maxSize=(45,45))
+			cars = car_cascade.detectMultiScale(gray, 1.2, 4, minSize=(20,20), maxSize=(45,45))
 			for (x,y,w,h) in cars:
 				cv2.rectangle(frame, (int(x*scaleUp), int(y*scaleUp)), (int((x+w)*scaleUp), int((y+h)*scaleUp)), (0,255,0), 2)
 			

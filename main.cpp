@@ -19,7 +19,7 @@ std::vector<Rect> detectByCascade( Mat frame );
 
 void detectByCascadeAndKalmanFilter( Mat frame, map<int,KalmanFilter>& KFm);
 
-void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame);
+void bgSub(Ptr<BackgroundSubtractor> bg, SimpleBlobDetector& detector, Mat& frame);
 
 void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame, map<int,KalmanFilter>& KFm);
 
@@ -113,7 +113,7 @@ int getTrackId(int x, int y, map<int,KalmanFilter>& KFm){
 }
 
 //detect and draw bounding box by backgroun subtraction
-void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame){
+void bgSub(Ptr<BackgroundSubtractor> bg, SimpleBlobDetector& detector, Mat& frame){
     // Mat back;
     Mat fore;
     Mat frame_gray;
@@ -127,7 +127,7 @@ void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& fram
     // namedWindow("Background");
     cvtColor(frame,frame_gray,CV_BGR2GRAY);
     // imshow("gray", frame_gray);
-    bg.operator ()(frame_gray,fore);
+    bg->apply(frame_gray,fore);
     // bg.getBackgroundImage(back);
     
     GaussianBlur( fore, fore, Size( 3, 3), 1,1);
@@ -157,7 +157,7 @@ void bgSub(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& fram
     return;
 }
 
-void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& detector, Mat& frame, map<int,KalmanFilter>& KFm){
+void bgSubAndKalmanFilter(Ptr<BackgroundSubtractorMOG2> bg, SimpleBlobDetector& detector, Mat& frame, map<int,KalmanFilter>& KFm){
     // Mat back;
     Mat fore;
     Mat frame_gray;
@@ -171,7 +171,7 @@ void bgSubAndKalmanFilter(BackgroundSubtractorMOG2& bg, SimpleBlobDetector& dete
     // namedWindow("Background");
     cvtColor(frame,frame_gray,CV_BGR2GRAY);
     // imshow("gray", frame_gray);
-    bg.operator ()(frame_gray,fore);
+    bg->apply(frame_gray,fore);
     // bg.getBackgroundImage(back);
     
     GaussianBlur( fore, fore, Size( 3, 3), 1,1);
